@@ -237,7 +237,7 @@ x2 <- content(r2, encoding="UTF-8")
 sapply(x2$result,  "[[", "title") 
 ```
 
-The pubdates can be converted using as.POSIXct.
+The pubdates can be converted using `as.POSIXct`.
 
 ```
 sapply(x2$result,  "[[", "pubdate")
@@ -250,7 +250,7 @@ as.POSIXct( round(as.numeric(z)/1000), origin = "1970-01-01")
 
 These last two steps are combined in the `get_bsve` function.  Without
 a filter, all 978 titles are returned.  The function includes API
-options for `top`, `skip`  and `orderby`  (although orderby still does
+options for `top`, `skip`  and `orderby`  (although orderby may
 not work)
 
 ```
