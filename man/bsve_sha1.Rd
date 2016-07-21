@@ -19,7 +19,7 @@ bsve_sha1(api_key, secret_key, email)
 % \seealso{ }
 \examples{
  # replace these values
-api_key <- "AKcfef08f1-c852-43b9-bce7-8923880e3b68"
+api_key <- "AKcfef08f1-c852-..."
 secret_key <-  "mySECRETkey" 
 email <-  "my@email"
 token <- bsve_sha1(api_key, secret_key, email)
