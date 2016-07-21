@@ -5,7 +5,7 @@
 ###Installation
 
 The package requires a recent version of `openssl` to create the hash
-key, `httr` and `plyr` packages 
+key and `httr` to get data.
 
 ```
 library(devtools)
@@ -38,9 +38,8 @@ token
 
 If you are not familiar with `httr`, be sure to check the [quickstart
 guide](https://github.com/hadley/httr/blob/master/vignettes/quickstart.Rmd).
+This code will list all data sources
 
-I may add functions to simplify some queries, but for now I will
-go through each step and include the URL  (`/api/data/list`)  and  authentication header to `GET`.
 
 ```
 url <- "http://search.bsvecosystem.net/api/data/list"
@@ -62,134 +61,103 @@ Parse the results into a nested list (`content` uses `fromJSON` in
 x <- content(r)
 
 sapply(x, length)
-   status   message requestId    result    errors 
-        1         1         0        15         0 
+ status message  result 
+      1       1      21 
 names(x$result[[1]])
 [1] "name"        "description" "fileTypes"   "label"       "shortLabel"  "fields"     
-[7] "dataSources"
+[7] "dataSources" "type"        "attributes" 
 ```
 
 Both `fields` and `dataSources` are arrays with 0 to many elements, so just grab the first 5 keys and count the number of fields
-and dataSources below.
+and dataSources below.  This requires `rbind_all` in the `dplyr` package.
 
 ```
-b1 <- ldply(lapply( x$result, function(y) y[1:5] ), "data.frame",
-stringsAsFactors=FALSE)
+b1 <-rbind_all(lapply( x$result, "[", 1:5 ) )
 b1$fields <- sapply( x$result, function(y) length( y$fields) )
 b1$dataSources <- sapply( x$result, function(y) length( y$dataSources) )
 
-b1[, c(1:2,6:7)]
-              name                             description fields dataSources
-1           AFCENT                            Clinic Visit     39           0
-2   Demo Data Type Testing addition of data to repository.      2           0
-3            EIDSS                         EIDSS Flat File     22           0
-4  HydraSourceType          Test dataSource type for hydra      4           2
-5        HydraType          Test dataSource type for hydra      4           1
-6        Leidos Wx          Weather for use by Leidos apps      2           0
-7         LeidosWx          Weather for use by Leidos apps      2           0
-8              NDD                           NDD Flat File     20           0
-9              PON                           PON Flat File     31           1
-10             RSS                                RSS Feed     18          65
-11    RSS_FLATFILE                           RSS Flat File      0           0
-12              SD                     Syndromic Flat File     15           0
-13            SODA                          SODA Flat File      0          15
-14         TWITTER                       Twitter Flat File      0           1
-15       WEBSEARCH                              Web Search      0           0
+b1[, c(1:2,6:7)] %>% print(n=30)
+                   name                             description fields dataSources
+                  (chr)                                   (chr)  (int)       (int)
+1                AFCENT                            Clinic Visit     39           3
+2      AGG_CASE_LISTING                 Aggregated Case Listing      0           0
+3        BLANK_TEMPLATE                          Blank Template      0           0
+4        Demo Data Type Testing addition of data to repository.      2           0
+5  DORAAirportProximity                Distance from an airport      3           8
+6                 EIDSS                         EIDSS Flat File     22           0
+7                 EMAIL                              Email Feed     18           1
+8          EventTracker                           Event Tracker      0           0
+9       HydraSourceType          Test dataSource type for hydra      4           2
+10            HydraType          Test dataSource type for hydra      4           1
+11       IND_CASE_LINES                   Individual_Case_Lines      0           0
+12            Leidos Wx          Weather for use by Leidos apps      2           0
+13             LeidosWx          Weather for use by Leidos apps      2           0
+14                  NDD                           NDD Flat File     20           0
+15                  PON                           PON Flat File     31           1
+16                  RSS                                RSS Feed     18          65
+17         RSS_FLATFILE                           RSS Flat File      0           0
+18                   SD                     Syndromic Flat File     15           0
+19                 SODA                          SODA Flat File      0          15
+20              TWITTER                       Twitter Flat File      0           1
+21            WEBSEARCH                              Web Search      0           0
+```
+
+Also use `rbind_all` to get the 18 RSS fields in list element 16.
+
+```
+rbind_all(x$result[[16]]$fields)
+
+               name    type format      description position
+              (chr)   (chr)  (chr)            (chr)    (int)
+1            source  String                  source        0
+2                id  String                      id        0
+3       description  String             description        0
+4             title  String                   title        0
+5           content  String                 content        0
+6           pubDate    Date                 pubDate        0
+7              link  String                    link        0
+8          filename  String                filename        0
+9             cases  String                   cases        0
+10           deaths  String                  deaths        0
+11 hospitalizations  String        hospitalizations        0
+12         latitude   Float                latitude        0
+13        longitude   Float               longitude        0
+14        simulated Boolean               simulated        0
+15             what  String                    what        0
+16             when  String                    when        0
+17            where  String                   where        0
+18              who  String                     who        0
 ```
 
 
-###Notes on parsing lists with NULLs
-
-If you want to list fields or dataSources, `ldply` will return an error if [NULLs are present](http://stackoverflow.com/questions/15793759/convert-r-list-to-dataframe-with-missing-null-elements). I have included a few options below to avoid NULLs and parse the RSS
-fields in element 10.
-
-OPTION 1. Remove nulls before combining
-
-If you don't know where NULLs are found, you can remove them
-using `Filter`
+You can list the 65 RSS dataSources below.  Contacts and other fields
+have 0 to many values, so just get the first three.
 
 ```
-y <- lapply(x$result[[10]]$fields, Filter, f = Negate(is.null))
-ldply(y, "data.frame")
-        name    type
-1      cases  String
-2     deaths  String
-3       when  String
-4       link  String
-5      where  String
-6  longitude   Float
-7  simulated Boolean
-8   latitude   Float
-9         id  String
-10    source  String
-...
-```
-
-OPTION 2.  Skip NULL fields
-
-When you figure out where NULLs are located, you can skip those keys.
-```
-ldply( lapply(x$result[[10]]$fields, "[",  1:2), "data.frame")
-```
-
-OPTION 3. USE `do.call`
-
-There are two problems with `do.call`.  First, if a tag if missing, I think it
- will fill the row by silenting repeating values.  Second, while the table
- looks correct, each column is actually a
- [list](https://stat.ethz.ch/pipermail/r-help//2012-November/340399.html)
- 
-```
-as.data.frame(do.call("rbind", x$result[[10]]$fields ))
-    name   type format description
-1  cases String   NULL        NULL
-2 deaths String   NULL        NULL
-3   when String   NULL        NULL
-...
-```
-
-OPTION 4.   Use RJSONIO and replace NULLs with NAs
-
-The `RJSONIO` package has a `nullValue` option that lets you replace NULLs with NAs.
-This returns a different nested list than `jsonlite` with named vectors
-instead of lists, so use rbind.
-
-```
-x1 <- RJSONIO::fromJSON(content(r, "text"), nullValue=NA)
-str(x1$result[[10]]$fields[[1]])
-       name        type      format description 
-    "cases"    "String"          NA          NA 
-ldply( x1$result[[10]]$fields, "rbind")  
-    name   type format description
-1  cases String   <NA>        <NA>
-2 deaths String   <NA>        <NA>
-3   when String   <NA>        <NA>
-```
+names(x$result[[16]]$dataSources[[1]])
+[1] "name"         "type"         "category"     "description"  "status"       "contacts"    
+[7] "schema"       "tags"         "capabilities"
 
 
-You can list the 65 RSS dataSources below.  Only the first 3 keys have
-non-NULL values and fields is an empty list except in SODA, which has
-an array with 4 elements like the result fields above. 
-
-```
-names(x$result[[10]]$dataSources[[1]])
-[1] "name"        "category"    "description" "feedType"    "selected"    "status"     
-[7] "fields"     
-
-ldply( lapply(x$result[[10]]$dataSources, "[",  1:2), "data.frame")
-                                           name        category
-1                            Agriculture Canada   Expert Domain
-2         Agrifeeds Animal Diseases and Control   Expert Domain
-3 AgriFeeds News on Phytosanitary Measures IPPC   Expert Domain
-4 AgriFeeds News on Plant Pathology and Disease   Expert Domain
-5                        Agrifeeds Pest Control   Expert Domain
-6                           AP Top Science News Non-Domain News
-...
+rbind_all( lapply(x$result[[16]]$dataSources, "[",  1:3) )
+                                             name  type        category
+                                           (chr) (chr)           (chr)
+1                             Agriculture Canada   RSS   Expert Domain
+2          Agrifeeds Animal Diseases and Control   RSS   Expert Domain
+3  AgriFeeds News on Phytosanitary Measures IPPC   RSS   Expert Domain
+4  AgriFeeds News on Plant Pathology and Disease   RSS   Expert Domain
+5                         Agrifeeds Pest Control   RSS   Expert Domain
+6                            AP Top Science News   RSS Non-Domain News
+7                                Avian Flu Diary   RSS     Domain News
+8                            Buenos Aires Herald   RSS Non-Domain News
+9                           CDC MMWR Quick Stats   RSS   Expert Domain
+10                              CDC MMWR Reports   RSS   Expert Domain
+..                                           ...   ...             ...
 ```
 
 ###4.6 Querying the Datasource API
 
-Use `api/data/query/{data}` to query RSS or other datasets.  I'm not familiar with all the query options, so please send me examples or post them to [issues](https://github.com/cstubben/bsve/issues/1).
+Use `api/data/query/{data}` to query RSS or other datasets.  
 
 ```
 url1 <- "http://search.bsvecosystem.net/api/data/query/RSS"
@@ -198,15 +166,12 @@ r1 <- GET(url1,  add_headers("harbinger-authentication" = token),
   query = list(`$source` = "CDC MMWR Reports",  `$filter`="pubDate ge 2016-02-01") )
 
 x1 <- content(r1)
-x1[!sapply(x1, is.null)]
+x1
 $status
 [1] 0
 
 $message
 [1] "In Progress"
-
-$requestId
-[1] "abfe96a8-1ce8-4336-8abb-4ce89550e204"
 
 $query
 $query$type
@@ -217,15 +182,16 @@ $query$sources
 
 $query$filter
 [1] "pubDate ge 2016-02-01"
-...
+
+
+$requestId
+[1] "135171b2-308b-4ae3-955f-46c6b651611d"
 ```
 
 
 ###4.7 Getting Datasource Results
 
-You need the `requestId` above to download the
-results.  I have not looked at this carefully, but I did figure out
-how to find titles and dates (and these nested lists are way too complicated).  The dates can be converted using `as.POSIXct`.
+You need the `requestId` above to download the results.
 
 ```
 url2 <- "http://search.bsvecosystem.net/api/data/result/"
@@ -233,19 +199,48 @@ r2 <-  GET( paste0(url2, x1$requestId), add_headers("harbinger-authentication" =
 x2 <- content(r2)
 
 sapply(x2, length)
+   status   message    result     count     query requestId 
+   1         1         7         1         3         1
+   
+names(x2$result[[1]])
+ [1] "id"                  "source"              "dataSourceName"      "simulated"          
+ [5] "textRelevance"       "pubdate"             "title"               "link"               
+ [9] "description"         "content"             "latitude"            "longitude"          
+[13] "noofcases"           "noofhospitalization" "noofdeaths"          "who"                
+[17] "what"                "when"                "where"               "filename"  
 
-names(x2$result[[1]]$hits)
-[1] "found"                "start"                "hit"                 
-[4] "additionalProperties"
-
-sapply(x2$result[[1]]$hits$hit, function(y) y$data$title[[1]])
-[1] "EARLY RELEASE: Vital Signs: Preventing Antibiotic-Resistant Infections in Hospitals - United States, 2014" 
-[2] "SUPPLEMENTS: Development of the Community Health Improvement Navigator Database of Interventions" 
-[3] "RECOMMENDATIONS AND REPORTS: CDC Guideline for Prescribing Opioids for Chronic Pain - United States, 2016" 
-[4] "EARLY RELEASE: Transmission of Zika Virus Through Sexual Contact with Travelers to Areas of Ongoing Transmission - Continental United States, 2016"
+sapply(x2$result,  "[[", "title")
+[1] "EARLY RELEASE: Vital Signs: Preventing Antibiotic-Resistant Infections in Hospitals Ã¢Â\u0080Â\u0094 United States, 2014"                                         
+[2] "SUPPLEMENTS: Development of the Community Health Improvement Navigator Database of Interventions"                                                                 
+[3] "Transmission of Zika Virus Through Sexual Contact with Travelers to Areas of Ongoing Transmission Ã¢Â\u0080Â\u0094 Continental United States, 2016"               
+[4] "EARLY RELEASE: Transmission of Zika Virus Through Sexual Contact with Travelers to Areas of Ongoing Transmission Ã¢Â\u0080Â\u0094 Continental United States, 2016"
 ...
+```
 
-z <- sapply(x2$result[[1]]$hits$hit, function(y) y$data$pubdate[[1]]) 
+
+Note, I'm not sure how to fix the encoding in title names above.  You
+can check using `stringi`, but adding an encoding option does not help.
+
+```
+stringi::stri_enc_detect(content(r2, "raw"))
+[[1]]
+[[1]]$Encoding
+[1] "UTF-8"        "windows-1252" "windows-1250" "UTF-16BE"     "UTF-16LE"     "windows-1254"
+
+[[1]]$Language
+[1] ""   "en" "ro" ""   ""   "tr"
+
+[[1]]$Confidence
+[1] 1.00 0.54 0.20 0.10 0.10 0.08
+
+x2 <- content(r2, encoding="UTF-8")
+sapply(x2$result,  "[[", "title") 
+```
+
+The pubdates can be converted using as.POSIXct.
+
+```
+sapply(x2$result,  "[[", "pubdate")
 [1] "1457112660000" "1456509505000" "1457112600000" "1456511400000" "1456507345000"
 [6] "1456500085000" "1456511400000"
 
@@ -253,13 +248,17 @@ as.POSIXct( round(as.numeric(z)/1000), origin = "1970-01-01")
 [1] "2016-03-04 10:31:00 MST" "2016-02-25 10:58:25 MST" "2016-03-04 10:30:00 MST" ...
 ```
 
-These last two steps are combined in the `get_bsve` function.  Without a filter, all 794 titles are returned.  The function includes API options for `top`, `skip`  and `orderby`,  but currently they do not seem to change the results!
+These last two steps are combined in the `get_bsve` function.  Without
+a filter, all 978 titles are returned.  The function includes API
+options for `top`, `skip`  and `orderby`  (although orderby still does
+not work)
 
 ```
 x1 <- get_bsve(token, "RSS", source ="CDC MMWR Reports")
 x2 <- get_bsve(token, "RSS", source ="CDC MMWR Reports", filter="pubdate ge 2016-02-01")
-## same 7 unsorted titles as x2
 x3 <- get_bsve(token, "RSS", source ="CDC MMWR Reports", filter="pubdate ge 2016-02-01", orderby="pubdate DESC", top=5)
+order(sapply(x3$result,  "[[", "pubdate"))
+[1] 5 2 4 3 1
 
 ```
 

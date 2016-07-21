@@ -7,4 +7,5 @@ Author: Chris Stubben
 Maintainer: Chris Stubben <stubben@lanl.gov>
 License: GPL-3
 Depends: openssl, httr
+Suggest: dplyr
 Description: search and retrieve data from the BSVE data API 
